@@ -1,228 +1,372 @@
 package com.example.chatapplication1_1;
 
-import static androidx.constraintlayout.helper.widget.MotionEffect.TAG;
-
-import android.annotation.SuppressLint;
+import android.content.DialogInterface;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.SignInMethodQueryResult;
-import com.google.firebase.database.ChildEventListener;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.Query;
 import com.google.firebase.database.ValueEventListener;
 
 import java.util.Objects;
 
 public class MainActivity2 extends AppCompatActivity {
-    TextView textView2,allMessages;
+    TextView textView2, allMessages;
     EditText message, user_email;
-    String nickname, email, emailToCheck, key;
+    String nickname, email, emailToCheck;
     FirebaseDatabase database;
     FirebaseAuth auth;
     DatabaseReference reference;
-    DatabaseReference newChatRef;
-    DatabaseReference chatRef;
     Button send_btn;
+    ImageButton imageSendButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main2);
 
-        textView2 = findViewById(R.id.textView2);  // hello message
-        send_btn  = findViewById(R.id.send_btn);   // send message button
+        textView2 = findViewById(R.id.hello_msg);  // hello user message
+        send_btn = findViewById(R.id.send_btn);   // send message button
+
+        imageSendButton = findViewById(R.id.imageSendButton);
 
         nickname = getIntent().getStringExtra("nickname");
         email = getIntent().getStringExtra("e-mail");
 
-        user_email = findViewById(R.id.userEmail);
+        user_email = findViewById(R.id.userEmail);      // chat participant's email
 
+        textView2.setText("Hello " + nickname);
 
-        textView2.setText("Hello "+ nickname);
-
-        allMessages = findViewById(R.id.textView3);   // whole conversation
-        allMessages.setText("");                      // initialize with null
+        allMessages = findViewById(R.id.textView3);    // whole conversation
+        allMessages.setText("");                       // initialize with null
 
         message = findViewById(R.id.editTextText3);   // user chat message
 
-        auth = FirebaseAuth.getInstance();  // user authentication
+        auth = FirebaseAuth.getInstance();           // user authentication
         database = FirebaseDatabase.getInstance();
-        //reference = database.getReference("chats");
+        reference = database.getReference("chats");
+
+        message.setVisibility(View.GONE);
+        send_btn.setVisibility(View.GONE);          // send message button
+        imageSendButton.setVisibility(View.GONE);
     }
 
-    // first check if other user's mail exists in database
-    public void findUserByEmail(View view){
+
+    public void findUserByEmail(View view) {       // button to find chat participant  by email
 
         emailToCheck = user_email.getText().toString().trim();
 
-        if (!emailToCheck.isEmpty() && !emailToCheck.equals(email)){
+        if (!emailToCheck.isEmpty() && !emailToCheck.equals(email)) {
             auth.fetchSignInMethodsForEmail(emailToCheck).addOnCompleteListener(task -> {
-                if (task.isSuccessful()){
+                if (task.isSuccessful()) {
 
-                    System.out.println("Participant's email: "+ emailToCheck);
+                    System.out.println("Participant's email: " + emailToCheck);
 
                     SignInMethodQueryResult result = task.getResult();
                     if (result != null && result.getSignInMethods() != null) {
-                        //List<String> signInMethods = result.getSignInMethods();
-                        // Handle the case where the email exists
+                       // Handle the case where the email  exists
                         System.out.println("Chat participant has been found!");
                         showMessage("Success", "Chat participant has been found!");
-                        reference = database.getReference("chats");
-
-                        // this was a comment
-                        reference.push().setValue(new Chat121(email, emailToCheck,""));
 
                         startChat();  // start chat conversation
-
-                        //Log.d(TAG, "Email exists. Sign-in methods: " + signInMethods.toString());
+                    } else {  // Handle the case where the result or sign-in methods are null
+                        System.out.println("Error");
                     }
-                    else {
-                        System.out.println("IDK WTF");
-                        showMessage("methods", "null");
-                        // Handle the case where the result or sign-in methods are null
-                        //Log.w(TAG, "Result or sign-in methods are null");
-                    }
-                }
-                else {
+                } else {
                     // The email address is not associated with an existing account
                     // Handle the case where the email does not exist
-                    System.out.println("Error, participant's email does not exists!");
-                    showMessage("Error","Participant's email does not exist!");
-                    //Log.w(TAG, "Email does not exist", task.getException());
+                    System.out.println("Error, participant's email does not exist!");
+                    showMessage("Error", "Participant's email does not exist!");
                 }
             });
-        }
+        } else if (emailToCheck.isEmpty())
+            showMessage("Error", "Chat participant's email cannot be null!");
+        else showMessage("Error", "Mate, you cannot chat with yourself!");
     }
 
-    public void startChat(){
+    public void startChat() {
 
+        // show buttons
         send_btn.setVisibility(View.VISIBLE);
         message.setVisibility(View.VISIBLE);
+        //imageSendButton.setVisibility(View.VISIBLE);
 
-       /* reference.addValueEventListener(new ValueEventListener() {
 
+        /* ---------------------- Initialize Realtime Database: ----------------------*/
+        String emails1 = email + ", " + emailToCheck;   // 1st users emails combination
+        String emails2 = emailToCheck + ", " + email;   // 2nd users emails combination
+
+        Query query = reference.orderByChild("email").equalTo(emails1);
+        Query query2 = reference.orderByChild("email").equalTo(emails2);
+
+        //query.addListenerForSingleValueEvent(new ValueEventListener() {
+        query.addValueEventListener(new ValueEventListener() {
             @Override
-            public void onDataChange(@NonNull DataSnapshot snapshot) {    // snapshot e.g helen:hi
-*/
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
 
-               // String previousMessages = allMessages.getText().toString();
-                //String previousMessages;
-                System.out.println("Inside onDataChange()!");
-                //System.out.println("reference: " + reference.child("users"));
+                String previousMessages = allMessages.getText().toString();
 
-                // Add a child event listener to iterate through each child
-                reference.addChildEventListener(new ChildEventListener() {
+                if (dataSnapshot.exists()) {
+                    System.out.println("Case1");
+                    System.out.println("Key: " + dataSnapshot.getKey());
+                    showMessages(dataSnapshot, previousMessages);
 
-                    @Override
-                    public void onChildAdded(@NonNull DataSnapshot dataSnapshot, @Nullable String previousChildName) {
-
-
-                        System.out.println("New child!");
-                        // Get the key of the current child (chat node)
-
-                        String chatKey = dataSnapshot.getKey();
-
-
-                        if ((dataSnapshot.child("email1").getValue() == email &&
-                                dataSnapshot.child("email2").getValue() == emailToCheck) ||
-                                (dataSnapshot.child("email1").getValue() == emailToCheck &&
-                                        dataSnapshot.child("email2").getValue() == email)) {
+                } else {  // does not exist or exist the 2nd combination
+                    query2.addValueEventListener(new ValueEventListener() {
+                        @Override
+                        public void onDataChange(@NonNull DataSnapshot snapshot) {
 
                             String previousMessages = allMessages.getText().toString();
-                            // Check if the current child has the "message" field
-                            if (dataSnapshot.hasChild("message")) {
 
-                                // Get the value of the "message" field for the current child
-                                String message1 = dataSnapshot.child("message").getValue(String.class);
-
-                                if (message1 != null) {
-                                    // Handle the message for the current child as needed
-                                    Log.d(TAG, "Chat Key: " + chatKey + ", Message: " + message1);
-
-                                    allMessages.setText(previousMessages + "\n" + message1);
-
-                                } else {
-                                    Log.d(TAG, "Message is null for Chat Key: " + chatKey);
-                                }
-                            } else {
-                                Log.d(TAG, "No 'message' field for Chat Key: " + chatKey);
+                            if (snapshot.exists()) {
+                                System.out.println("Case2");
+                                showMessages(snapshot, previousMessages);
                             }
                         }
-                    }
+                        @Override
+                        public void onCancelled(@NonNull DatabaseError error) {
+                        }
+                    });
+                }
+            }
 
-                    @Override
-                    public void onChildChanged(@NonNull DataSnapshot snapshot, @Nullable String previousChildName) {}
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+            }
+        });
 
-                    @Override
-                    public void onChildRemoved(@NonNull DataSnapshot snapshot) {}
-
-                    @Override
-                    public void onChildMoved(@NonNull DataSnapshot snapshot, @Nullable String previousChildName) {}
-
-                    @Override
-                    public void onCancelled(@NonNull DatabaseError error) {}
-                });
-
-
-               // System.out.println("Snapshot key elements: "+ snapshot.child("-Nm8Ij7099RkKrTZRTiy").child("message").getValue());
-                //System.out.println("key is: "+key);
-                /*if (snapshot.getValue()!=null) {
-                    System.out.println("Snapshot message: "+ snapshot.getValue());
-                    //System.out.println("Message is: " + snapshot.child("chats").child("message").getValue());
-                    allMessages.setText(previousMessages + "\n" + snapshot.getValue());
-                }*/
-
-
-         /*   @Override
-            public void onCancelled(@NonNull DatabaseError error) {}
-       // });*/
+        history();  // load previous messages in the chat
     }
 
-    public void send_msg(View view){  // send a message to the chat
 
-        if(!message.getText().toString().trim().isEmpty()){
+    private void showMessages(DataSnapshot dataSnapshot, String previousMessages) {
 
-            // this was uncomment
-            //Chat121 chatEmails = new Chat121(email, emailToCheck, nickname+":"+message.getText().toString());
+        System.out.println("Inside updateMessage2()");
 
-            System.out.println("Create object type Chat121");
+        // Reference to the one and only match child node
+        DataSnapshot userSnapshot = dataSnapshot.getChildren().iterator().next();
+        //System.out.println("UserSnapShot" + userSnapshot);
 
-            //newChatRef = reference.push();
-            //newChatRef.setValue(/*nickname+":"+message.getText().toString(),*/ chatEmails);  // save to firebase
+        String[] messages = Objects.requireNonNull(userSnapshot.child("message").getValue()).toString().trim().split(", ");
+        String lastMessage = messages[messages.length - 1];
 
-            // this was uncomment
-            //reference.push().setValue(chatEmails);
+        System.out.println("Previous messages: " + previousMessages);
+        System.out.println("Last message: " + lastMessage);
 
-            reference.ch
+        allMessages.setText(previousMessages + "\n" + lastMessage);
+
+        System.out.println("Message has been shown successfully!");
+    }
+
+    public void history() {   // load chat history
+
+        String emails1 = email + ", " + emailToCheck;
+        String emails2 = emailToCheck + ", " + email;
+
+        Query query = reference.orderByChild("email").equalTo(emails1);///equalTo(emails1);
+        Query query2 = reference.orderByChild("email").equalTo(emails2);
+
+        query.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+
+                if (dataSnapshot.exists()) {
+                    loadMessages(dataSnapshot);
+                } else {   // does not exist or exist the 2nd combination
+                    query2.addListenerForSingleValueEvent(new ValueEventListener() {
+                        @Override
+                        public void onDataChange(@NonNull DataSnapshot snapshot) {
+                            if (snapshot.exists()) {
+                                loadMessages(snapshot);
+                            }
+                        }
+
+                        @Override
+                        public void onCancelled(@NonNull DatabaseError error) {
+                        }
+                    });
+                }
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+            }
+        });
+
+    }
+
+    private void loadMessages(DataSnapshot dataSnapshot) {
+
+        for (DataSnapshot userSnapshot : dataSnapshot.getChildren()) {
+
+            System.out.println("Chat exists!");
+
+            String messages = userSnapshot.child("message").getValue(String.class);
+
+            if (messages != null) {
+                System.out.println("All messages: " + messages);
+                String[] messagesAr = messages.split(", ");
+
+                // Create a StringBuilder to concatenate array elements
+                StringBuilder stringBuilder = new StringBuilder();
+
+                for (String msg : messagesAr) {
+                    System.out.println(msg);
+                    stringBuilder.append(msg).append("\n");
+                    //allMessages.setText(pm + "\n" + msg);
+                }
+                allMessages.setText(stringBuilder);
+            }
+        }
+    }
+
+    public void send_msg(View view) {  // button's method: send a message in the chat
+
+        if (!message.getText().toString().trim().isEmpty()) {
+            System.out.println("Inside send_msg()!");
+
+            checkAndCreateChat121(message.getText().toString().trim());
 
             message.setText("");   // clear message field
-
-            key = reference.getKey();
-            System.out.println("Key is: "+ key);
-            System.out.println("reference: " +  reference);
-            //System.out.println("NewChatRef : "+ newChatRef);
-
-            //chatRef = newChatRef.child(key);
-            //System.out.println("chatref: "+ chatRef);
-            //chatRef = database.getReference("chats").child(key);
-
+        } else {
+            showMessage("Error", "Please write a message first!..");
         }
-        else {showMessage("Error","Please write a message first!..");}
     }
-    void showMessage(String title, String message){
-        new AlertDialog.Builder(this).setTitle(title).setMessage(message).setCancelable(true).show();
+
+    public void checkAndCreateChat121(String msg) {
+
+        System.out.println("Inside checkAndCreateChat121()!");
+
+        String emails1 = email + ", " + emailToCheck;
+        String emails2 = emailToCheck + ", " + email;
+
+        Query query = reference.orderByChild("email").equalTo(emails1);///equalTo(emails1);
+        Query query2 = reference.orderByChild("email").equalTo(emails2);
+
+        query.addListenerForSingleValueEvent(new ValueEventListener() {
+            //query.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+
+                if (dataSnapshot.exists()) {
+                    System.out.println("Case1 1st email combo");
+                    //System.out.println("Key: " + dataSnapshot.getKey());
+                    updateMessage(dataSnapshot, msg);
+
+                } else {  // does not exist or exist the 2nd combination
+                    query2.addListenerForSingleValueEvent(new ValueEventListener() {
+                        @Override
+                        public void onDataChange(@NonNull DataSnapshot snapshot) {
+                            if (snapshot.exists()) {
+                                System.out.println("Case2 2nd email combo");
+                                updateMessage(snapshot, msg);
+                            } else { // Node doesn't exist, create a new node
+                                System.out.println("Case3 create new chat node");
+                                createNode(snapshot, emails1, msg);
+                            }
+                        }
+
+                        @Override
+                        public void onCancelled(@NonNull DatabaseError error) {
+                        }
+                    });
+                }
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+            }
+        });
+    }
+
+    private void updateMessage(DataSnapshot dataSnapshot, String newMessage) {
+
+        System.out.println("Inside updateMessage()");
+
+        // Reference to the 'message' attribute in the specific chat node
+        DataSnapshot userSnapshot = dataSnapshot.getChildren().iterator().next();
+        System.out.println("UserSnapShot" + userSnapshot);
+
+        DatabaseReference messageReference = reference.child(Objects.requireNonNull(userSnapshot.getKey()));
+
+
+        String prevMessages = Objects.requireNonNull(userSnapshot.child("message").getValue()).toString();
+
+        System.out.println("Previous msgs: " + prevMessages);
+        System.out.println("Message to add: " + newMessage);
+
+        String newMsg = prevMessages + ", " + nickname + ":" + newMessage;
+        System.out.println("New message: " + newMsg);
+
+
+        messageReference.child("message").setValue(newMsg);
+
+        System.out.println("Chat has been updated successfully!");
+    }
+
+    private void createNode(DataSnapshot snapshot, String emails, String msg) {
+
+        System.out.println("Creating new chat node...");
+        DatabaseReference newChatRef = FirebaseDatabase.getInstance().getReference("chats").push();
+
+        String msgToAdd = nickname + ":" + msg;
+
+        newChatRef.setValue(new Chat121(emails, msgToAdd));
+
+        System.out.println("New chat node has been created successfully!");
+    }
+
+    void showMessage(String title, String message) {
+        // Create an AlertDialog.Builder
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+
+        // Set the title and message
+        builder.setTitle(title);
+        builder.setMessage(message);
+
+        // Set the positive button and its click listener
+        builder.setPositiveButton("Close", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                // Do something when the "Close" button is clicked
+                dialog.dismiss(); // Dismiss the dialog
+            }
+        });
+
+        // Create and show the dialog
+        AlertDialog helpDialog = builder.create();
+        helpDialog.show();
+
+        //new AlertDialog.Builder(this).setTitle(title).setMessage(message).setCancelable(true).show();
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
