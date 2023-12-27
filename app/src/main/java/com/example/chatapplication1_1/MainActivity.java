@@ -19,8 +19,9 @@ import com.google.firebase.auth.UserProfileChangeRequest;
 
 public class MainActivity extends AppCompatActivity {
     EditText email,password,nickname;
-    FirebaseAuth auth;
-    FirebaseUser user;
+    FirebaseAuth auth, auth1;
+    FirebaseUser user, user1;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -67,6 +68,9 @@ public class MainActivity extends AppCompatActivity {
         user.updateProfile(request);
     }
     public void signin(View view){
+        auth = FirebaseAuth.getInstance();
+        user = auth.getCurrentUser();
+
         if(!email.getText().toString().isEmpty() &&
                 !password.getText().toString().isEmpty()){
             auth.signInWithEmailAndPassword(email.getText().toString(),
@@ -75,6 +79,10 @@ public class MainActivity extends AppCompatActivity {
                 public void onComplete(@NonNull Task<AuthResult> task) {
                     if (task.isSuccessful()){
                         showMessage("Success","User signed in successfully!");
+
+                        Button b = findViewById(R.id.button);
+                        b.setVisibility(View.GONE);
+
                     }else {
                         showMessage("Error",task.getException().getLocalizedMessage());
                     }
@@ -82,7 +90,19 @@ public class MainActivity extends AppCompatActivity {
             });
         }
     }
+    public void signout(View view){
+        auth = FirebaseAuth.getInstance();
+        user = auth.getCurrentUser();
+
+        showMessage("Success", "You signed out successfully.");
+        auth.signOut();
+
+        Button b = findViewById(R.id.button);
+        b.setVisibility(View.VISIBLE);
+    }
     public void chat(View view){
+        auth = FirebaseAuth.getInstance();
+        user = auth.getCurrentUser();
         if (user!=null){
             Intent intent = new Intent(this, MainActivity2.class);
             intent.putExtra("nickname",user.getDisplayName());
